@@ -61,5 +61,5 @@ The application is decoupled into three production-grade modules:
 
 1. **Clone the repository**
    ```bash
-   git clone [https://github.com/YOUR_USERNAME/revenue-architect.git](https://github.com/YOUR_USERNAME/revenue-architect.git)
+   git clone [https://github.com/rameezahmad9726/revenue-architect.git](https://github.com/YOUR_USERNAME/revenue-architect.git)
    cd revenue-architect
