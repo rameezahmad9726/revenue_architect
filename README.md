@@ -1,65 +1,89 @@
-# revenue_architect
-Enterprise-grade Customer Value Estimator. An automated data pipeline that transforms raw, messy transactional logs into actionable RFM insights using Random Forest &amp; Streamlit.
+📋 Instructions
+Create a folder named screenshots in your GitHub repository.
 
-# 🚀 Revenue Architect: Intelligent Customer Value Engine
+Upload the three images you just showed me into that folder.
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Streamlit](https://img.shields.io/badge/Streamlit-Deployed-red)
-![Scikit-Learn](https://img.shields.io/badge/ML-RandomForest-orange)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
+Copy the text below into your README.md file.
 
-> **A robust, end-to-end Machine Learning pipeline that automates the "Dirty Data" problem and generates Customer Lifetime Value (CLV) scores.**
+Markdown
+🏛️ Revenue Architect (v2.0)
+ AI-Powered Customer Value & Churn Prediction System
 
----
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://revenuearchitect.streamlit.app/)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Library](https://img.shields.io/badge/Library-Lifetimes%20(BG%2FNBD)-orange)
 
-## 💼 Business Problem
-Most revenue prediction models fail in the real world because transactional data is messy—inconsistent dates, missing IDs, and mixed types. Companies spend 80% of their time cleaning data and only 20% analyzing it.
-
-**Revenue Architect** solves this by enforcing a strict "Data Contract." It features a resilient **Data Janitor** module that ingests chaotic CSVs, standardizes them, and feeds them into an **RFM-based Predictive Engine** to identify high-value customers instantly.
+Live Demo: [revenuearchitect.streamlit.app](https://revenuearchitect.streamlit.app/)
 
 ---
 
-## 🏗️ System Architecture
+ 💼 Business Value
+Most companies look at *past* revenue. **Revenue Architect** looks at *future* potential.
 
-The application is decoupled into three production-grade modules:
+This application processes transactional retail data to answer three critical questions for stakeholders:
+1.  Who is leaving? (Churn Prediction)
+2.  How much are they worth? (Customer Lifetime Value - CLV)
+3.  What should we do? (ROI Simulation)
 
-### 1. 🧹 The Data Janitor (`cleaner.py`)
-* **Defensive Programming:** Automatically detects and strips metadata rows, fixes mixed-type columns, and creates safety copies (`df.copy()`) to prevent mutation bugs.
-* **Fuzzy Column Matching:** Uses "Survivor-Logic" to find columns like `revenue`, `sales`, or `amount` even if the user names them incorrectly.
-* **Date Normalization:** Casts arbitrary timestamp formats into standardized `YYYY-MM-DD` objects.
-
-### 2. 🧠 The Predictive Core (`model.py`)
-* **Automated Feature Engineering:** Converts raw log data into **Recency, Frequency, and Monetary (RFM)** features on the fly.
-* **Scoring Logic:** Uses a **Random Forest Regressor** to rank customers by their probability of high future spend.
-* **Scalability:** Tested on the **Online Retail II dataset (40,000+ rows)** with sub-second inference time.
-
-### 3. 📊 The Interface (`app.py`)
-* **Self-Service BI:** A Streamlit-based frontend that allows non-technical stakeholders to upload data and download reports.
-* **Actionable Visualizations:** Uses color-graded data tables to highlight "Whale" customers (High Value) vs. "Churn Risk" customers.
+It transforms raw data into a strategic decision-making tool, allowing marketing teams to switch focus from "blind mass emailing" to **targeted high-value interventions**.
 
 ---
 
-## 📸 Screenshots
+🏗️ Technical Architecture
 
-| **Stage 1: The Janitor** | **Stage 2: The Intelligence** |
-|:---:|:---:|
-| *Automatically cleans and fixes "invalid" data.* | *Identifies VIP customers using RFM scores.* |
-| *(Add your screenshot of the Raw vs Clean table here)* | *(Add your screenshot of the Green Prediction Table here)* |
+The system is built on **Probabilistic Machine Learning** models rather than black-box AI, ensuring interpretability and statistical validity.
+
+ 1. The Predictive Engine (`lifetimes` library)
+ Vitality Model (BG/NBD): The *Beta-Geometric / Negative Binomial Distribution* model predicts the probability of a customer being "alive" (active) based on their Recency and Frequency.
+ Monetary Model (Gamma-Gamma):** Predicts the average order value for returning customers, accounting for the variance in spend per transaction.
+
+ 2. The Data Pipeline ("Data Janitor")
+ Automated cleaning of UCI Online Retail II dataset.
+ Handles missing Customer IDs, removes cancellations, and aggregates raw transactions into RFM (Recency, Frequency, Monetary) format.
+
+ 3. The Interactive Frontend (Streamlit)
+ Executive Dashboard: High-level KPIs (Total Pipeline Value, Churn Risk).
+ "What-If" Simulator: A dynamic tool to model revenue scenarios (e.g., "If we reduce churn by 5%, how much revenue do we save?").
 
 ---
 
-## 🛠️ Tech Stack
-* **Frontend:** Streamlit
-* **Data Processing:** Pandas, Pandera
-* **Machine Learning:** Scikit-Learn (Random Forest)
-* **Persistence:** Joblib
-* **Visualization:** Matplotlib / Streamlit Native
+📸 Key Features & Insights
+
+ 1. Executive Dashboard (The "Health Check")
+ Summarizes the entire customer base in seconds.
+![Executive Dashboard](screenshots/dashboard.png)
+ Insight:* The current dataset shows a highly stable business with only **1.2% Churn Risk**, validating a strategy focused on upselling rather than retention.
+
+2. Strategic Revenue Simulator
+Calculates the ROI of marketing interventions before spending a dime.*
+![Simulator](screenshots/simulator.png)
+Scenario A (Defense):* Trying to save "At-Risk" customers yields low returns (~$47 projected recovery).
+Scenario B (Growth):* The tool reveals the "Loyal" segment holds **$188,000+** in pipeline value, directing the business to pivot strategy toward loyalty programs.
+
+ 3. Actionable Intelligence
+ Instantly exports targeted lists for CRM tools.*
+ One-Click Export:** Download `active_vip_customers.csv` or `at_risk_customers.csv` for immediate campaign execution.
 
 ---
 
-## 🚀 Quick Start (Local)
+ 🚀 Installation & Usage
 
-1. **Clone the repository**
-   ```bash
-   git clone [https://github.com/rameezahmad9726/revenue-architect.git](https://github.com/YOUR_USERNAME/revenue-architect.git)
-   cd revenue-architect
+To run this project locally:
+
+```bash
+# 1. Clone the repo
+git clone [https://github.com/rameezahmad9726/revenue_architect.git](https://github.com/rameezahmad9726/revenue_architect.git)
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Run the app
+streamlit run app.py
+🛠️ Tech Stack
+Core: Python, Pandas, NumPy
+
+Modeling: lifetimes (BG/NBD, Gamma-Gamma models)
+
+Visualization: Plotly Express, Streamlit
+
+Deployment: Streamlit Cloud
