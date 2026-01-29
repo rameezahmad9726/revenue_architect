@@ -1,20 +1,23 @@
 import streamlit as st
 import pandas as pd
-import os
-import joblib
 import matplotlib.pyplot as plt
+import plotly.express as px
 from cleaner import DataJanitor
 from model import RevenuePredictor
-from lifetimes import BetaGeoFitter
+from lifetimes import BetaGeoFitter, GammaGammaFitter
 from lifetimes.utils import summary_data_from_transaction_data
 from lifetimes.plotting import plot_probability_alive_matrix
 
+# --- 1. CONFIGURATION & SETUP ---
+st.set_page_config(page_title="Revenue Architect Pro", layout="wide")
+
+# --- 2. HELPER FUNCTIONS ---
+
 def run_prediction_engine(df):
     """
-    Transform raw transaction data into RFM format and fit BG/NBD model.
-    This matches the column names in your uploaded CSV.
-    We create a summary table: Recency, Frequency, and T (Age of customer)
+    Full Pipeline: RFM + BG/NBD (Vitality) + Gamma-Gamma (Monetary Value)
     """
+    # 1. Transform to RFM
     rfm_summary = summary_data_from_transaction_data(
         df, 
         customer_id_col='customer_id', 
@@ -22,208 +25,215 @@ def run_prediction_engine(df):
         monetary_value_col='price'
     )
 
-    # Initialize and fit the BG/NBD model
+    # 2. Fit Vitality Model (BG/NBD)
     bgf = BetaGeoFitter(penalizer_coef=0.01)
     bgf.fit(rfm_summary['frequency'], rfm_summary['recency'], rfm_summary['T'])
 
-    # Calculate Probability of being "Alive" (not churned)
-    rfm_summary['prob_alive'] = bgf.conditional_probability_alive(
+    # 3. Calculate Probability of being "Alive"
+    rfm_summary['probability_alive'] = bgf.conditional_probability_alive(
         rfm_summary['frequency'], rfm_summary['recency'], rfm_summary['T']
     )
-    
-    return rfm_summary, bgf
 
-def segment_customer_loyalty(rfm_summary):
+    # 4. Prepare for Monetary Model (Gamma-Gamma)
+    # We need Average Order Value (AOV), not just sum.
+    # Avoiding division by zero by adding 1 to frequency (total transactions)
+    rfm_summary['avg_order_value'] = rfm_summary['monetary_value'] / (rfm_summary['frequency'] + 1)
+    
+    # Gamma-Gamma requires repeat buyers (frequency > 0) and positive value
+    returning_customers = rfm_summary[
+        (rfm_summary['frequency'] > 0) & 
+        (rfm_summary['avg_order_value'] > 0)
+    ]
+
+    # 5. Fit Monetary Model
+    ggf = GammaGammaFitter(penalizer_coef=0.01)
+    ggf.fit(returning_customers['frequency'], returning_customers['avg_order_value'])
+
+    # 6. Predict CLV (The "Future Value")
+    rfm_summary['predicted_clv'] = ggf.customer_lifetime_value(
+        bgf, 
+        rfm_summary['frequency'],
+        rfm_summary['recency'],
+        rfm_summary['T'],
+        rfm_summary['avg_order_value'],
+        time=12, # 12 Months
+        discount_rate=0.01
+    )
+    
+    return rfm_summary, bgf, ggf
+
+def render_dashboard(rfm):
     """
-    Separate customers into two groups based on purchase frequency.
-    
-    Parameters:
-    -----------
-    rfm_summary : DataFrame
-        RFM summary table from the BG/NBD model
-    
-    Returns:
-    --------
-    loyal_customers : DataFrame
-        Customers with frequency > 0 (repeat buyers)
-    one_time_buyers : DataFrame
-        Customers with frequency == 0 (one-time purchases only)
+    Displays the High-Level Executive Summary
     """
-    # 1. Identify Loyal (Repeat) Customers
-    loyal_customers = rfm_summary[rfm_summary['frequency'] > 0].copy()
+    st.markdown("---")
+    st.header("📈 Executive Dashboard")
     
-    # 2. Identify One-Time Buyers
-    one_time_buyers = rfm_summary[rfm_summary['frequency'] == 0].copy()
-    
-    return loyal_customers, one_time_buyers
+    # KPI Calculations
+    total_customers = len(rfm)
+    active_customers = rfm[rfm['probability_alive'] > 0.5]
+    num_active = len(active_customers)
+    avg_clv = rfm['predicted_clv'].mean()
+    total_clv = rfm['predicted_clv'].sum()
+    churn_rate = (1 - (num_active / total_customers)) * 100
 
-@st.cache_data
-def convert_df_to_csv(df):
+    # Layout: 4 Key Metrics
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+    kpi1.metric("👥 Active Customers", f"{num_active}", delta=f"{num_active/total_customers:.1%} of Total")
+    kpi2.metric("💸 Avg CLV (12M)", f"${avg_clv:.2f}")
+    kpi3.metric("💰 Total Pipeline Value", f"${total_clv:,.0f}")
+    kpi4.metric("📉 Churn Risk", f"{churn_rate:.1f}%", delta="-High Risk" if churn_rate > 50 else "Stable", delta_color="inverse")
+
+    # Visual Health Check
+    st.subheader("Customer Health Distribution")
+    rfm['Status'] = rfm['probability_alive'].apply(lambda x: 'Active 🟢' if x >= 0.5 else 'At Risk 🔴')
+    status_counts = rfm['Status'].value_counts().reset_index()
+    status_counts.columns = ['Status', 'Count']
+    
+    fig = px.bar(status_counts, x='Count', y='Status', orientation='h', color='Status',
+                 color_discrete_map={'Active 🟢': '#2ecc71', 'At Risk 🔴': '#e74c3c'})
+    fig.update_layout(height=250)
+    st.plotly_chart(fig, use_container_width=True)
+
+def render_simulator(rfm_summary):
     """
-    Convert DataFrame to CSV format for browser download.
-    
-    Parameters:
-    -----------
-    df : DataFrame
-        The DataFrame to convert
-    
-    Returns:
-    --------
-    bytes
-        CSV data encoded as UTF-8 bytes
+    The Strategic "What-If" Simulator
     """
-    return df.to_csv(index=True).encode('utf-8')
+    st.markdown("---")
+    st.header("🔮 Strategic Revenue Simulator")
 
-# 1. Page Config - The first thing the user sees
-st.set_page_config(page_title="Revenue Architect Pro", layout="wide")
+    # --- INPUTS ---
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.subheader("⚙️ Simulation Settings")
+        strategy = st.radio("Choose Strategy:", ["🛡️ Defend: Rescue At-Risk", "🚀 Grow: Upsell Loyal"])
+        threshold = st.slider("Define 'Alive' Probability Threshold", 0.0, 1.0, 0.5, 0.05)
+        
+        if "Defend" in strategy:
+            impact_rate = st.slider("Recovery Success Rate (%)", 0, 50, 5)
+            impact_label = "Recovery Rate"
+        else:
+            impact_rate = st.slider("Upsell Success Rate (%)", 0, 50, 5)
+            impact_label = "AOV Increase"
 
-st.title("🚀 Intelligent Revenue Architect")
-st.markdown("""
-    **Production-Ready AI:** This system automates data scrubbing and uses 
-    Machine Learning to forecast future customer value.
-    ---
-""")
+    # --- CALCULATIONS ---
+    if "Defend" in strategy:
+        target_segment = rfm_summary[rfm_summary['probability_alive'] < threshold]
+        file_prefix = "at_risk"
+    else:
+        target_segment = rfm_summary[rfm_summary['probability_alive'] >= threshold]
+        file_prefix = "loyal_vip"
 
-# 2. Initialize our Logic Classes
+    total_potential_value = target_segment['predicted_clv'].sum()
+    revenue_impact = total_potential_value * (impact_rate / 100)
+    count = len(target_segment)
+
+    # --- OUTPUTS ---
+    with col2:
+        st.subheader("📊 Projected Outcomes")
+        st.metric(f"💰 Projected Revenue ({impact_label})", f"${revenue_impact:,.2f}", delta=f"{impact_rate}% Impact")
+        st.info(f"Targeting **{count}** customers with total pipeline value of **${total_potential_value:,.2f}**")
+        
+        # EXPORT BUTTON
+        st.markdown("### 📤 Take Action")
+        csv = target_segment.to_csv().encode('utf-8')
+        st.download_button(
+            label=f"Download {file_prefix} List",
+            data=csv,
+            file_name=f"{file_prefix}_customers.csv",
+            mime="text/csv"
+        )
+
+# --- 3. MAIN APP LAYOUT ---
+
+st.title("🚀 Intelligent Revenue Architect (v2.0)")
+st.markdown("**Production-Ready AI:** Automates data scrubbing, predicts CLV, and simulates ROI strategies.")
+
+# Initialize Classes
 janitor = DataJanitor()
 predictor = RevenuePredictor()
 
-# 3. Sidebar for Data Ingestion
+# Initialize Session State
+if 'rfm_summary' not in st.session_state:
+    st.session_state.rfm_summary = None
+
+# Sidebar
 st.sidebar.header("Data Control Center")
 uploaded_file = st.sidebar.file_uploader("Upload Transactional CSV", type="csv")
 
 if uploaded_file:
-    # --- STAGE 1: INGESTION & CLEANING ---
+    # --- STAGE 1: INGESTION ---
     df_raw = pd.read_csv(uploaded_file)
     
     st.subheader("🛠️ Stage 1: The Data Janitor")
     with st.spinner('Fixing messy data and enforcing schema...'):
-        # This handles the '100invalid120' style errors automatically
         df_clean = janitor.deep_clean(df_raw)
     
     col1, col2 = st.columns(2)
     with col1:
         st.caption("Raw Input (Messy)")
-        st.write(df_raw.head())
+        st.write(df_raw.head(3))
     with col2:
-        st.caption("Cleaned Output (Professional)")
-        st.write(df_clean.head())
+        st.caption("Cleaned Output")
+        st.write(df_clean.head(3))
 
-    # --- STAGE 2: MACHINE LEARNING ---
+    # --- STAGE 2: PROCESSING (BUTTON) ---
     st.markdown("---")
-    st.subheader("🧠 Stage 2: Revenue Forecasting")
-    
-    if st.button("Run Prediction Engine"):
-        with st.spinner('Calculating RFM Metrics & Running Predictive Analytics...'):
-            # Train model on current data to demonstrate the 'Brain'
-            predictor.train(df_clean)
+    if st.button("🚀 Run Analysis Engine"):
+        with st.spinner('Calculating RFM, Fitting BG/NBD, and Predicting CLV...'):
+            # 1. Run the heavy math
+            rfm, bgf, ggf = run_prediction_engine(df_clean)
             
-            # Generate features (Recency, Frequency, Monetary)
-            features = predictor.engineer_features(df_clean)
-            
-            # Run the prediction
-            preds = predictor.predict(features[['recency', 'frequency']])
-            features['future_value_score'] = preds
-            
-            # Run BG/NBD predictive engine
-            results, model = run_prediction_engine(df_clean)
-            
-        st.success("Analysis Complete!")
+            # 2. Save to Session State (So it survives slider interactions)
+            st.session_state.rfm_summary = rfm
+            st.session_state.bgf = bgf
+            st.session_state.ggf = ggf
+            st.success("Analysis Complete! Dashboard Generated.")
 
-        # --- Customer Vitality Analysis (BG/NBD Results) ---
-        st.write("### 📊 Customer Vitality Score")
-        st.caption("Probability that each customer is still 'alive' (active) based on BG/NBD model")
-        vitality_df = results[['frequency', 'recency', 'T', 'monetary_value', 'prob_alive']].copy()
-        vitality_df = vitality_df.sort_values(by='prob_alive', ascending=False)
+    # --- STAGE 3: DASHBOARD & SIMULATOR (PERSISTENT) ---
+    if st.session_state.rfm_summary is not None:
+        # Retrieve data from memory
+        rfm = st.session_state.rfm_summary
+        bgf = st.session_state.bgf
+        
+        # 1. Render Dashboard
+        render_dashboard(rfm)
+        
+        # 2. Render Simulator
+        render_simulator(rfm)
+        
+        # 3. Optional: Show Technical Model Plots
+        with st.expander("Show Technical Model Diagnostics"):
+            st.write("### Probability Alive Matrix")
+            fig = plt.figure(figsize=(6, 4))
+            plot_probability_alive_matrix(bgf)
+            st.pyplot(fig)
+        
+        # --- 4. DETAILED DATA INSPECTOR (Customer Prediction Log) ---
+        st.markdown("---")
+        st.subheader("🔍 Customer Prediction Log")
+        st.caption("View individual customer predictions. Columns are sortable.")
+
+        # Format the dataframe for display
+        display_df = rfm.copy()
+        
+        # We style it: Green = High Probability Alive, Red = Low Probability (Churn Risk)
         st.dataframe(
-            vitality_df.style.format({
-                'prob_alive': '{:.1%}',
+            display_df[['frequency', 'recency', 'T', 'monetary_value', 'probability_alive', 'predicted_clv']]
+            .sort_values(by='probability_alive', ascending=False)
+            .style.format({
+                'probability_alive': '{:.1%}',      # e.g., 95.2%
+                'predicted_clv': '${:,.2f}',        # e.g., $150.00
                 'monetary_value': '${:,.2f}',
                 'frequency': '{:.0f}',
-                'recency': '{:.0f}',
-                'T': '{:.0f}'
-            }).background_gradient(cmap='RdYlGn', subset=['prob_alive'])
+                'recency': '{:.0f} days'
+            })
+            .background_gradient(cmap='RdYlGn', subset=['probability_alive'])  # Red/Yellow/Green gradient
         )
-
-        # --- Probability Matrix Visualization ---
-        st.write("### 🔥 Probability Matrix (Recency vs Frequency)")
-        st.caption("This heatmap shows the probability of being alive based on purchase behavior")
-        fig = plt.figure(figsize=(6, 4))
-        plot_probability_alive_matrix(model)
-        st.pyplot(fig)
-
-        # --- Customer Loyalty Segmentation ---
-        st.markdown("---")
-        loyal_df, onetime_df = segment_customer_loyalty(results)
-
-        st.write("## 📊 Customer Base Breakdown")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.metric("Repeat Customers", len(loyal_df))
-            st.caption("Customers with 2+ purchases")
-
-        with col2:
-            st.metric("One-Time Buyers", len(onetime_df))
-            st.caption("Customers with only 1 purchase")
-
-        # Visualizing the difference in "Probability of Being Alive"
-        st.write("### 🧬 Health of Loyal Customers")
-        st.write("Loyal customers have an average 'Probability of being Alive' of: " + 
-                 f"{loyal_df['prob_alive'].mean():.2%}")
-
-        # Show the top loyal customers who are "At Risk"
-        st.write("### ⚠️ High-Value Customers At Risk")
-        st.caption("Loyal customers with low churn probability (probability < 50%)")
-        at_risk = loyal_df[loyal_df['prob_alive'] < 0.5].sort_values(by='monetary_value', ascending=False)
-        if len(at_risk) > 0:
-            st.dataframe(
-                at_risk[['frequency', 'recency', 'monetary_value', 'prob_alive']].head(10).style.format({
-                    'prob_alive': '{:.1%}',
-                    'monetary_value': '${:,.2f}',
-                    'frequency': '{:.0f}',
-                    'recency': '{:.0f}'
-                }).background_gradient(cmap='Reds', subset=['prob_alive'])
-            )
             
-            # Create the Download Button for At-Risk Customers
-            csv_data = convert_df_to_csv(at_risk)
-            
-            st.download_button(
-                label="📥 Download At-Risk Customer List for Marketing",
-                data=csv_data,
-                file_name='at_risk_customers.csv',
-                mime='text/csv',
-                help="Download this list to target these customers with a re-engagement email campaign."
-            )
-        else:
-            st.success("✅ No high-value customers at risk! Your loyal customer base is healthy.")
+    else:
+        st.info("👆 Click 'Run Analysis Engine' to generate insights.")
 
-        # --- STAGE 3: PROFESSIONAL VISUALIZATION ---
-        st.markdown("---")
-        st.write("### 💰 Revenue Forecast Report")
-        # We sort by highest predicted value first
-        display_df = features.sort_values(by='future_value_score', ascending=False)
-        
-        # This fixes the 'concerning' decimals and adds currency symbols
-        st.dataframe(
-            display_df.style.format({
-                'monetary': '${:,.2f}',
-                'future_value_score': '${:,.2f}',
-                'date': lambda x: x.strftime('%Y-%m-%d'), # This removes the time!
-                'recency': '{:.0f} days',
-                'frequency': '{:.0f} orders'
-            }).background_gradient(cmap='Greens', subset=['future_value_score'])
-        )
-        
-        # Download Link for the business user
-        csv = display_df.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📩 Download Prediction Report",
-            data=csv,
-            file_name='revenue_forecast_report.csv',
-            mime='text/csv',
-        )
 else:
-    st.info("👋 Welcome! Please upload a CSV with 'customer_id', 'revenue', and 'date' columns to begin.")
+    st.info("👋 Welcome! Please upload your transaction CSV to begin.")
