@@ -51,12 +51,14 @@ The system is built on **Probabilistic Machine Learning** models rather than bla
 
  1. Executive Dashboard (The "Health Check")
  Summarizes the entire customer base in seconds.
-![Executive Dashboard](screenshots/dashboard.png)
+![Executive Dashboard]<img width="1919" height="812" alt="image" src="https://github.com/user-attachments/assets/fe7c64a0-19e3-4ba9-b744-805a0cb4690d" />
+)
  Insight:* The current dataset shows a highly stable business with only **1.2% Churn Risk**, validating a strategy focused on upselling rather than retention.
 
 2. Strategic Revenue Simulator
 Calculates the ROI of marketing interventions before spending a dime.*
-![Simulator](screenshots/simulator.png)
+![Simulator](<img width="1872" height="763" alt="image" src="https://github.com/user-attachments/assets/9968ea81-e108-417c-8ece-39c349b73eb4" />
+)
 Scenario A (Defense):* Trying to save "At-Risk" customers yields low returns (~$47 projected recovery).
 Scenario B (Growth):* The tool reveals the "Loyal" segment holds **$188,000+** in pipeline value, directing the business to pivot strategy toward loyalty programs.
 
