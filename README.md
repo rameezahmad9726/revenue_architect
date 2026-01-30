@@ -57,7 +57,8 @@ The system is built on **Probabilistic Machine Learning** models rather than bla
 
 2. Strategic Revenue Simulator
 Calculates the ROI of marketing interventions before spending a dime.*
-![Simulator](<img width="1872" height="763" alt="image" src="https://github.com/user-attachments/assets/9968ea81-e108-417c-8ece-39c349b73eb4" />
+![Simulator]<img width="1872" height="763" alt="image" src="https://github.com/user-attachments/assets/57a15c36-8dd9-4258-afc2-6882f55fbb55" />
+
 )
 Scenario A (Defense):* Trying to save "At-Risk" customers yields low returns (~$47 projected recovery).
 Scenario B (Growth):* The tool reveals the "Loyal" segment holds **$188,000+** in pipeline value, directing the business to pivot strategy toward loyalty programs.
